@@ -16,7 +16,7 @@ sockaddr_in serv = sockaddr_in();
 
 
 
-## [ko] make socket file descriptor async
+## [b5485a3] make socket file descriptor async
 ```cpp
 // accept
 // conn1
@@ -86,3 +86,12 @@ while (conn2 < 0) {
 
 
 ## [ko] use errno in cpp
+```cpp
+#include <errno.h>
+
+// subject require cpp equivelent of c library if possible
+```
+
+```cpp
+#include <cerrno>
+```
