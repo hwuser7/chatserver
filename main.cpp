@@ -88,6 +88,29 @@ int main() {
 		}
 	}
 
+	// make conns non blocking
+	flags = fcntl(conn1, F_GETFL, 0);
+	if (flags < 0) {
+		std::cout << "Error conn1 F_GETFL\n";
+		return 1;
+	}
+	retval = fcntl(conn1, F_SETFL, flags | O_NONBLOCK);
+	if (retval < 0) {
+		std::cout << "Error conn1 F_SETFL\n";
+		return 1;
+	}
+
+	flags = fcntl(conn2, F_GETFL, 0);
+	if (flags < 0) {
+		std::cout << "Error conn2 F_GETFL\n";
+		return 1;
+	}
+	retval = fcntl(conn2, F_SETFL, flags | O_NONBLOCK);
+	if (retval < 0) {
+		std::cout << "Error conn2 F_SETFL\n";
+		return 1;
+	}
+
 
 	char buff[512];
 	ssize_t size;

@@ -85,7 +85,7 @@ while (conn2 < 0) {
 
 
 
-## [ko] use errno in cpp
+## [0032ef7] use errno in cpp
 ```cpp
 #include <errno.h>
 
@@ -94,4 +94,55 @@ while (conn2 < 0) {
 
 ```cpp
 #include <cerrno>
+```
+
+## [ko] make connected sockets nonblocking
+```cpp
+while (1) {
+	// still blocks conn1 doesnt inherit from sock directly
+	size = recv(conn1, buff, 511, 0);
+	if (size > 0) {
+		buff[size] = '\0';
+		size = send(conn2, buff, size, 0);
+		if (size < 0) {
+			std::cout << "Error send\n";
+			return 1;
+		}
+	}
+	// still blocks conn2 doesnt become non blocking automatically
+	size = recv(conn2, buff, 511, 0);
+	if (size > 0) {
+		buff[size] = '\0';
+		size = send(conn1, buff, size, 0);
+		if (size < 0) {
+			std::cout << "Error send\n";
+			return 1;
+		}
+	}
+}
+```
+
+```cpp
+// make conns non blocking
+flags = fcntl(conn1, F_GETFL, 0);
+if (flags < 0) {
+	std::cout << "Error conn1 F_GETFL\n";
+	return 1;
+}
+retval = fcntl(conn1, F_SETFL, flags | O_NONBLOCK);
+if (retval < 0) {
+	std::cout << "Error conn1 F_SETFL\n";
+	return 1;
+}
+
+flags = fcntl(conn2, F_GETFL, 0);
+if (flags < 0) {
+	std::cout << "Error conn2 F_GETFL\n";
+	return 1;
+}
+retval = fcntl(conn2, F_SETFL, flags | O_NONBLOCK);
+if (retval < 0) {
+	std::cout << "Error conn2 F_SETFL\n";
+	return 1;
+}
 ```
