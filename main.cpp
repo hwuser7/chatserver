@@ -117,6 +117,15 @@ int main() {
 
 	while (1) {
 		size = recv(conn1, buff, 511, 0);
+		if (size == 0) {
+			std::cout << "conn1 closed gracefully\n";
+			break;
+		}
+		if (size < 0 && errno == ECONNRESET)
+		{
+			std::cout << "conn1 closed by reset\n";
+			break;
+		}
 		if (size > 0) {
 			buff[size] = '\0';
 			size = send(conn2, buff, size, 0);
@@ -126,6 +135,15 @@ int main() {
 			}
 		}
 		size = recv(conn2, buff, 511, 0);
+		if (size == 0) {
+			std::cout << "conn2 closed gracefully\n";
+			break;
+		}
+		if (size < 0 && errno == ECONNRESET)
+		{
+			std::cout << "conn2 closed by reset\n";
+			break;
+		}
 		if (size > 0) {
 			buff[size] = '\0';
 			size = send(conn1, buff, size, 0);
@@ -135,6 +153,11 @@ int main() {
 			}
 		}
 	}
+
+	// close connection
+	close(conn1);
+	close(conn2);
+	close(sock);
 
 	return 0;
 }

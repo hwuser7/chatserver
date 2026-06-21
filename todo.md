@@ -96,7 +96,7 @@ while (conn2 < 0) {
 #include <cerrno>
 ```
 
-## [ko] make connected sockets nonblocking
+## [ab43a4c] make connected sockets nonblocking
 ```cpp
 while (1) {
 	// still blocks conn1 doesnt inherit from sock directly
@@ -145,4 +145,26 @@ if (retval < 0) {
 	std::cout << "Error conn2 F_SETFL\n";
 	return 1;
 }
+```
+
+## [ko] release connection when peer close connection
+```cpp
+size = recv(conn1, buff, 511, 0);
+if (size == 0) {
+	std::cout << "conn1 closed gracefully\n";
+	break;
+}
+if (size < 0 && errno == ECONNRESET)
+{
+	std::cout << "conn1 closed by reset\n";
+	break;
+}
+
+// ...
+
+// close connection
+close(conn1);
+close(conn2);
+close(sock);
+
 ```
