@@ -24,4 +24,4 @@ run: all
 val:
 	valgrind --leak-check=full --show-leak-kinds=all ./$(NAME)
 
-.PHONY: all clean fclean re run val
+.PHONY: all clean fclean re run vale.g., F_GETFL to get flags, F_SETFL to set flags
