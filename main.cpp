@@ -22,7 +22,7 @@ int main() {
 	}
 
 	// bind
-	sockaddr_in serv = {0};
+	sockaddr_in serv = sockaddr_in();
 	serv.sin_family = AF_INET;
 	serv.sin_port = htons(PORT);
 	serv.sin_addr.s_addr = htonl(INADDR_ANY);
