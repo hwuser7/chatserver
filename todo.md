@@ -147,7 +147,7 @@ if (retval < 0) {
 }
 ```
 
-## [ko] release connection when peer close connection
+## [ee9bd16] release connection when peer close connection
 ```cpp
 size = recv(conn1, buff, 511, 0);
 if (size == 0) {
@@ -167,4 +167,16 @@ close(conn1);
 close(conn2);
 close(sock);
 
+```
+
+## [ko] use IO multiplexing to reduce cpu usage
+
+```cpp
+// currently there are loops for new connection sockets
+// and loops for events on them
+```
+
+```cpp
+// poll() is now listening events and connection can be closed
+// and remade
 ```

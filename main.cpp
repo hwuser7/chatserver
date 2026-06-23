@@ -5,8 +5,23 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <cerrno>
+#include <poll.h>
 
 #define PORT 9998
+
+void makeNonBlocking(int socketFD) {
+	int flags = fcntl(socketFD, F_GETFL, 0);
+	if (flags < 0) {
+		std::cout << "Error F_GETFL\n";
+		return ;
+	}
+	int retval;
+	retval = fcntl(socketFD, F_SETFL, flags | O_NONBLOCK);
+	if (retval < 0) {
+		std::cout << "Error F_SETFL\n";
+		return ;
+	}
+}
 
 int main() {
 	// main socket
@@ -16,19 +31,10 @@ int main() {
 		return 1;
 	}
 
-	int flags = fcntl(sock, F_GETFL, 0);
-	if (flags < 0) {
-		std::cout << "Error F_GETFL\n";
-		return 1;
-	}
+	// make it non-blocking
+	makeNonBlocking(sock);
+
 	int retval;
-	retval = fcntl(sock, F_SETFL, flags | O_NONBLOCK);
-	if (retval < 0) {
-		std::cout << "Error F_SETFL\n";
-		return 1;
-	}
-
-
 	int opt = 1;
 	retval = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof opt);
 	if (retval < 0) {
@@ -54,109 +60,119 @@ int main() {
 		return 1;
 	}
 
-	// accept
-	// conn1
-	int conn1 = accept(sock, NULL, NULL);
-	while (conn1 < 0) {
-		if (conn1 < 0) {
-			if (errno == EAGAIN || errno == EWOULDBLOCK) {
-				// no pending connection
-				// ask again
-				conn1 = accept(sock, NULL, NULL);
-			}
-			else {
-				std::cout << "Error conn1\n";
-				return 1;
-			}
-		}
-	}
 
+	// fds size 3 (2 connection sockets and 1 master socket)
+	pollfd fds[3];
 	
-	// conn2
-	int conn2 = accept(sock, NULL, NULL);
-	while (conn2 < 0) {
-		if (conn2 < 0) {
-			if (errno == EAGAIN || errno == EWOULDBLOCK) {
-				// no pending connection
-				// ask again
-				conn2 = accept(sock, NULL, NULL);
-			}
-			else {
-				std::cout << "Error conn2\n";
-				return 1;
-			}
-		}
-	}
+	pollfd master;
+	master.fd = sock;
+	master.events = POLLIN;
+	master.revents = 0;
+	
+	pollfd conn1;
+	conn1.fd = -1;
+	conn1.events = 0;
+	conn1.revents = 0;
 
-	// make conns non blocking
-	flags = fcntl(conn1, F_GETFL, 0);
-	if (flags < 0) {
-		std::cout << "Error conn1 F_GETFL\n";
-		return 1;
-	}
-	retval = fcntl(conn1, F_SETFL, flags | O_NONBLOCK);
-	if (retval < 0) {
-		std::cout << "Error conn1 F_SETFL\n";
-		return 1;
-	}
+	pollfd conn2;
+	conn2.fd = -1;
+	conn2.events = 0;
+	conn2.revents = 0;
 
-	flags = fcntl(conn2, F_GETFL, 0);
-	if (flags < 0) {
-		std::cout << "Error conn2 F_GETFL\n";
-		return 1;
-	}
-	retval = fcntl(conn2, F_SETFL, flags | O_NONBLOCK);
-	if (retval < 0) {
-		std::cout << "Error conn2 F_SETFL\n";
-		return 1;
-	}
-
+	fds[0] = master;
+	fds[1] = conn1;
+	fds[2] = conn2;
 
 	char buff[512];
-	ssize_t size;
 
 	while (1) {
-		size = recv(conn1, buff, 511, 0);
-		if (size == 0) {
-			std::cout << "conn1 closed gracefully\n";
-			break;
+		retval = poll(fds, 3, -1);
+		if (retval < 0) {
+			std::cout << "Error poll\n";
 		}
-		if (size < 0 && errno == ECONNRESET)
-		{
-			std::cout << "conn1 closed by reset\n";
-			break;
-		}
-		if (size > 0) {
-			buff[size] = '\0';
-			size = send(conn2, buff, size, 0);
-			if (size < 0) {
-				std::cout << "Error send\n";
-				return 1;
+		// check if new connection
+		if (fds[0].revents & POLLIN) {
+			// add new conection to fds
+			if (fds[1].fd == -1) {
+				fds[1].fd = accept(sock, NULL, NULL);
+				makeNonBlocking(fds[1].fd);
+				fds[1].events = POLLIN;
+				fds[1].revents = 0;
+			}
+			else if (fds[2].fd == -1) {
+				fds[2].fd = accept(sock, NULL, NULL);
+				makeNonBlocking(fds[2].fd);
+				fds[2].events = POLLIN;
+				fds[2].revents = 0;
+			}
+			else {
+				std::cout << "Error connection limit reached\n";
 			}
 		}
-		size = recv(conn2, buff, 511, 0);
-		if (size == 0) {
-			std::cout << "conn2 closed gracefully\n";
-			break;
-		}
-		if (size < 0 && errno == ECONNRESET)
-		{
-			std::cout << "conn2 closed by reset\n";
-			break;
-		}
-		if (size > 0) {
-			buff[size] = '\0';
-			size = send(conn1, buff, size, 0);
-			if (size < 0) {
-				std::cout << "Error send\n";
-				return 1;
+		if (fds[1].fd != -1 && fds[2].fd != -1) {
+			if (fds[1].revents & POLLIN) {
+				retval = recv(fds[1].fd, buff, 511, 0);
+				if (retval < 0) {
+					std::cout << "Error recive from socket\n";
+				}
+				else if (retval == 0) {
+					std::cout << "Remote closed connection\n";
+					fds[1].fd = -1;
+					fds[1].events = 0;
+					fds[1].revents = 0;
+				}
+				else {
+					buff[retval] = '\0';
+					retval = send(fds[2].fd, buff, retval+1, 0);
+					if (retval == 0) {
+						std::cout << "Remote closed connection\n";
+						fds[2].fd = -1;
+						fds[2].events = 0;
+						fds[2].revents = 0;
+					}
+					else if (retval < 0) {
+						std::cout << "Error sending to socket\n";
+					}
+					else {
+						std::cout << "Message send\n";
+					}
+				}
+
+			}
+			else if (fds[2].revents & POLLIN) {
+				retval = recv(fds[2].fd, buff, 511, 0);
+				if (retval < 0) {
+					std::cout << "Error recive from socket\n";
+				}
+				else if (retval == 0) {
+					std::cout << "Remote closed connection\n";
+					fds[2].fd = -1;
+					fds[2].events = 0;
+					fds[2].revents = 0;
+				}
+				else {
+					buff[retval] = '\0';
+					retval = send(fds[1].fd, buff, retval+1, 0);
+					if (retval == 0) {
+						std::cout << "Remote closed connection\n";
+						fds[1].fd = -1;
+						fds[1].events = 0;
+						fds[1].revents = 0;
+					}
+					else if (retval < 0) {
+						std::cout << "Error sending to socket\n";
+					}
+					else {
+						std::cout << "Message send\n";
+					}
+				}
+
 			}
 		}
 	}
 
-	// close connection
-	close(conn1);
-	close(conn2);
+	close(fds[1].fd);
+	close(fds[2].fd);
 	close(sock);
 
 	return 0;
