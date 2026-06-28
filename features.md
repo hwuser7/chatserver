@@ -169,7 +169,7 @@ close(sock);
 
 ```
 
-## [ko] use IO multiplexing to reduce cpu usage
+## [6589db2] use IO multiplexing to reduce cpu usage
 
 ```cpp
 // currently there are loops for new connection sockets
@@ -180,3 +180,7 @@ close(sock);
 // poll() is now listening events and connection can be closed
 // and remade
 ```
+
+## [ko] use more than two client connections
+
+## [ko] use simple message sending with socket numbers
