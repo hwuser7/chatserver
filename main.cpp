@@ -7,19 +7,20 @@
 #include <cerrno>
 #include <poll.h>
 #include <vector>
+#include <cstring>
 
 #define PORT 9998
 
 int makeSockNonBlocking(int sock) {
 	int flags = fcntl(sock, F_GETFL, 0);
 	if (flags < 0) {
-		std::cout << "Error F_GETFL\n";
+		std::cerr << "Error F_GETFL: " << std::strerror(errno) << "\n";
 		return -1;
 	}
 	int retval;
 	retval = fcntl(sock, F_SETFL, flags | O_NONBLOCK);
 	if (retval < 0) {
-		std::cout << "Error F_SETFL\n";
+		std::cerr << "Error F_SETFL: " << std::strerror(errno) << "\n";
 		return -1;
 	}
 	return 0;
@@ -30,7 +31,7 @@ int setSockOpt(int sock) {
 	int opt = 1;
 	retval = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof opt);
 	if (retval < 0) {
-		std::cout << "Error setsock\n";
+		std::cerr << "Error setsock: " << std::strerror(errno) << "\n";
 		return -1;
 	}
 	return 0;
@@ -44,7 +45,7 @@ int bindSock(int sock) {
 	serv.sin_addr.s_addr = htonl(INADDR_ANY);
 	retval = bind(sock, (sockaddr *)&serv, sizeof serv);
 	if (retval < 0) {
-		std::cout << "Error bind\n";
+		std::cerr << "Error bind: " << std::strerror(errno) << "\n";
 		return -1;
 	}
 	return 0;
@@ -58,42 +59,68 @@ int startListeningSock(int *mSock) {
 	*mSock = socket(AF_INET, SOCK_STREAM, 0);
 	sock = *mSock;
 	if (sock < 0) {
-		std::cout << "Error socket\n";
+		std::cerr << "Error socket: " << std::strerror(errno) << "\n";
 		return -1;
 	}
 
 	// make socket non-blocking
 	retval = makeSockNonBlocking(sock);
-	if (retval < 0) 
-		return -1;
+	if (retval < 0) {
+			close(sock);
+			return -1;
+	}
+
 
 	// set socket option
 	retval = setSockOpt(sock);
-	if (retval < 0)
-		return -1;
+	if (retval < 0) {
+			close(sock);
+			return -1;
+	}
 
 	// bind socket
 	retval = bindSock(sock);
 	if (retval < 0) {
-		return -1;
+			close(sock);
+			return -1;
 	}
 
 	// listen
-	retval = listen(sock, 4096);
+	retval = listen(sock, SOMAXCONN);
 	if (retval < 0) {
-		std::cout << "Error listen\n";
-		return -1;
+			std::cerr << "Error listen: " << std::strerror(errno) << "\n";
+			close(sock);
+			return -1;
 	}
 	return 0;
 }
 
-void 
+int acceptConnection(std::vector<pollfd>& fds) {
+	pollfd temp;
+	int retval;
+	
+	retval = accept(fds[0].fd, NULL, NULL);
+	if (retval < 0) {
+		if (errno != EAGAIN && errno != EWOULDBLOCK)
+			std::cerr << "Error accept: " << std::strerror(errno) << "\n";
+		return retval;	
+	}
+	if (makeSockNonBlocking(retval) < 0) {
+		close(retval);
+		return -1;
+	}
+	
+	temp.fd = retval;
+	temp.events = POLLIN;
+	temp.revents = 0;
+	fds.push_back(temp);
+	return retval;
+}
 
-void checkRevents(int ev, std::vector<pollfd> fds) {
+int checkRevents(std::vector<pollfd>& fds) {
 	int i;
 	int size;
 	int retval;
-	pollfd temp;
 
 	retval = 0;
 	i = 0;
@@ -102,28 +129,30 @@ void checkRevents(int ev, std::vector<pollfd> fds) {
 		if (fds[i].revents & (POLLERR | POLLHUP | POLLNVAL)) {
 			if (fds[i].revents & (POLLERR | POLLHUP)) {
 				close(fds[i].fd);
-				fds.erase(fds.begin() + i);
-				--i;
-				--size;
 			}
-			std::cout << "Error events\n";
+			fds.erase(fds.begin() + i);
+			--i;
+			--size;
+			std::cerr << "Socket error events\n";
+			if (i == -1) {
+				std::cerr << "Fatal error listening socket\n";
+				return -1;	
+			}
+			continue;
 		}
 		if (i == 0 && (fds[i].revents & POLLIN)) {
-			retval = accept(fds[0], NULL, NULL);
-			temp.fds = retval;
-			temp.events = POLLIN;
-			temp.revent = 0;
-			
+			retval = acceptConnection(fds);
 			while (retval > -1) {
-				retval = accept(fds[0], NULL, NULL);
-				temp.fds = retval;
-				temp.events = POLLIN;
-				temp.revent = 0;
+				retval = acceptConnection(fds);
 			}
+			std::cout << "New connections\n";
 		}
-		// check events on clients
+		if (i != 0 && (fds[i].revents & POLLIN)) {
+			std::cout << "New events on client connections\n";
+		}
 		i++;
 	}
+	return 0;
 }
 
 int main() {
@@ -144,13 +173,21 @@ int main() {
 	std::vector<pollfd> fds;
 	fds.push_back(mainSocket);
 
-	retval = poll(&fds[0], fds.size(), -1);
+	while (1) {
+		retval = poll(&fds[0], fds.size(), -1);
 
-	if (retval < 0)
-		std::cout << "Error poll\n";
-	if (retval > 0) {
-		checkRevents(retval, fds);
+		if (retval < 0) {
+			if (errno == EINTR)
+				continue;
+			std::cout << "Error poll: " << std::strerror(errno) << "\n";
+		}
+
+		if (retval > 0) {
+			if (checkRevents(fds) < 0)
+				return -1;
+		}
 	}
 
+	close(fds[0].fd);
 	return 0;
 }
