@@ -11,6 +11,11 @@
 
 #define PORT 9998
 
+struct User {
+	int fd;
+	int nick;
+};
+
 int makeSockNonBlocking(int sock) {
 	int flags = fcntl(sock, F_GETFL, 0);
 	if (flags < 0) {
@@ -119,12 +124,13 @@ int acceptConnection(std::vector<pollfd>& fds) {
 
 // todo
 void processClientEvents(int socket) {
-	char buff[512];
-	ssize_t retval;
+
 	
-	
-	retval = recv(socket, buff, 511, );
-	
+}
+
+// todo
+void createUser() {
+
 }
 
 int checkRevents(std::vector<pollfd>& fds) {
@@ -156,6 +162,7 @@ int checkRevents(std::vector<pollfd>& fds) {
 				retval = acceptConnection(fds);
 			}
 			std::cout << "New connections\n";
+			createUser();
 		}
 		if (i != 0 && (fds[i].revents & POLLIN)) {
 			std::cout << "New events on client connections\n";
@@ -195,6 +202,8 @@ int startPolling(int sock) {
 	}
 	return 0;
 }
+
+
 
 int main() {
 	int retval;
