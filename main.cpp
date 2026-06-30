@@ -26,7 +26,7 @@ int makeSockNonBlocking(int sock) {
 	return 0;
 }
 
-int setSockOpt(int sock) {
+int setSockOptReuse(int sock) {
 	int retval;
 	int opt = 1;
 	retval = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof opt);
@@ -72,7 +72,7 @@ int startListeningSock(int *mSock) {
 
 
 	// set socket option
-	retval = setSockOpt(sock);
+	retval = setSockOptReuse(sock);
 	if (retval < 0) {
 			close(sock);
 			return -1;
@@ -117,6 +117,16 @@ int acceptConnection(std::vector<pollfd>& fds) {
 	return retval;
 }
 
+// todo
+void processClientEvents(int socket) {
+	char buff[512];
+	ssize_t retval;
+	
+	
+	retval = recv(socket, buff, 511, );
+	
+}
+
 int checkRevents(std::vector<pollfd>& fds) {
 	int i;
 	int size;
@@ -149,22 +159,15 @@ int checkRevents(std::vector<pollfd>& fds) {
 		}
 		if (i != 0 && (fds[i].revents & POLLIN)) {
 			std::cout << "New events on client connections\n";
+			processClientEvents();
 		}
 		i++;
 	}
 	return 0;
 }
 
-int main() {
-	int retval;
-	int sock;
 
-	// start listening master socket
-	retval = startListeningSock(&sock);
-	if (retval < 0)
-		return 1;
-
-	// start polling
+int startPolling(int sock) {
 	pollfd mainSocket;
 	mainSocket.fd = sock;
 	mainSocket.events = POLLIN;
@@ -172,6 +175,9 @@ int main() {
 
 	std::vector<pollfd> fds;
 	fds.push_back(mainSocket);
+	
+	int retval;
+	retval = 0;
 
 	while (1) {
 		retval = poll(&fds[0], fds.size(), -1);
@@ -187,7 +193,21 @@ int main() {
 				return -1;
 		}
 	}
+	return 0;
+}
 
-	close(fds[0].fd);
+int main() {
+	int retval;
+	int sock;
+
+	retval = startListeningSock(&sock);
+	if (retval < 0)
+		return 1;
+
+	retval = startPolling(sock);
+	if (retval < 0)
+		return 1;
+
+	close(sock);
 	return 0;
 }

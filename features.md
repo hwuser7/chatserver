@@ -181,6 +181,16 @@ close(sock);
 // and remade
 ```
 
-## [ko] use more than two client connections
+## [d5b006a] use dynamic client connections
+Instead of manually adding client connection now they can be added dynamically
 
 ## [ko] use simple message sending with socket numbers
+
+Sender can list active sockets with `list` command `<<` is the end of message or command chars
+usage with simple netcat:
+
+```bash
+nc 127.0.0.1 9998 #connect to server
+list<<            #send list command
+2 hello<<         #sends hello to socket number 2
+``` 
